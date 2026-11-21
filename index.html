@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Своя игра — пульт ведущего</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Unbounded:wght@600;800;900&display=swap">
+<style>
+:root{
+  --bg:#121418;
+  --panel:#1a1d23;
+  --panel-2:#23272f;
+  --line:rgba(255,255,255,.09);
+  --line-2:rgba(255,255,255,.17);
+  --text:#f3f4f6;
+  --muted:#b0b6c0;
+  --faint:#9299a5;
+  --blue:#3a404b;
+  --blue-hi:#4a515e;
+  --gold:#ffc83a;
+  --gold-ink:#1d1400;
+  --up:#33e391;
+  --down:#ff5a6e;
+  --ease-out:cubic-bezier(.16,1,.3,1);
+  --f-display:"Unbounded","Golos Text",sans-serif;
+  --f-text:"Golos Text","Segoe UI",sans-serif;
+  --f-data:"JetBrains Mono",Consolas,monospace;
+  --r:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font:400 15px/1.45 var(--f-text);overflow:hidden}
+::selection{background:var(--gold);color:var(--gold-ink)}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:10px;border:3px solid var(--panel)}
+::-webkit-scrollbar-track{background:transparent}
+svg.i{width:18px;height:18px;flex:none}
+
+.app{height:100%;display:grid;grid-template-rows:auto 1fr auto}
+
+/* header */
+.top{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);background:#0d0f12}
+.brand{font:800 15px/1 var(--f-display);color:var(--gold);letter-spacing:.02em;text-transform:uppercase;white-space:nowrap}
+.brand small{display:block;margin-top:5px;font:500 12px/1 var(--f-text);color:var(--faint);text-transform:none;letter-spacing:0}
+.status{margin-left:8px;padding:6px 12px;border-radius:8px;background:var(--panel);font:600 13px/1 var(--f-text);color:var(--muted);white-space:nowrap}
+.status b{color:var(--text)}
+.spacer{flex:1}
+
+.btn{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:9px;background:var(--panel-2);
+  box-shadow:inset 0 0 0 1px var(--line-2);font-weight:600;font-size:14px;white-space:nowrap;transition:background .15s, transform .1s, box-shadow .15s}
+.btn:hover{background:#2e333c}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.primary{background:var(--blue);box-shadow:none}
+.btn.primary:hover{background:var(--blue-hi)}
+.btn.gold{background:var(--gold);color:var(--gold-ink);box-shadow:none}
+.btn.gold:hover{background:#ffd666}
+.btn.ghost{background:transparent}
+.btn.big{height:46px;padding:0 20px;font-size:15px}
+.btn.ok{background:rgba(51,227,145,.14);color:var(--up);box-shadow:inset 0 0 0 1px rgba(51,227,145,.45)}
+.btn.ok:hover{background:rgba(51,227,145,.24)}
+.btn.no{background:rgba(255,90,110,.12);color:var(--down);box-shadow:inset 0 0 0 1px rgba(255,90,110,.45)}
+.btn.no:hover{background:rgba(255,90,110,.22)}
+.btn.on{box-shadow:inset 0 0 0 2px var(--gold)}
+kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:rgba(255,255,255,.08);color:var(--muted)}
+
+/* main */
+.main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:14px;padding:14px 16px;min-height:0}
+.col{display:flex;flex-direction:column;gap:14px;min-height:0;overflow:auto}
+.col > .panel{flex:none}
+.col > .panel.qp{flex:1 1 auto;min-height:0}
+.main > .col:last-child{overflow:hidden}
+.panel{background:var(--panel);border-radius:var(--r);box-shadow:inset 0 0 0 1px var(--line);min-height:0}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px 0}
+.ph h2{font:700 13px/1 var(--f-text);color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+
+/* mini board */
+.mb{padding:12px 14px 14px;display:grid;gap:6px}
+.mb-row{display:grid;grid-template-columns:minmax(0,1.6fr) repeat(5,minmax(0,1fr));gap:6px}
+.mb-theme{font:600 12.5px/1.2 var(--f-text);color:var(--muted);display:flex;align-items:center;padding-right:6px;text-wrap:balance}
+.mb-cell{position:relative;height:42px;border-radius:7px;background:linear-gradient(180deg,#191c21 0 50%,#111317 50% 100%);
+  font:800 14px/1 var(--f-display);color:var(--gold);display:grid;place-items:center;transition:transform .12s, filter .12s}
+.mb-cell:hover{filter:brightness(1.25)}
+.mb-cell:active{transform:scale(.97)}
+.mb-cell.played{background:transparent;box-shadow:inset 0 0 0 1px var(--line);color:var(--faint);font-weight:600;text-decoration:line-through;opacity:.55}
+.mb-cell.current{box-shadow:0 0 0 2px var(--gold), 0 6px 16px rgba(0,0,0,.4)}
+.mb-cell .sp{position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:5px;background:var(--gold);color:var(--gold-ink);display:grid;place-items:center}
+.mb-cell .sp svg{width:11px;height:11px}
+.mb-cell.played .sp{opacity:.5}
+
+/* preview */
+.pv{padding:12px 14px 14px}
+.pv-frame{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#0d0f12;box-shadow:inset 0 0 0 1px var(--line)}
+.pv-frame iframe{position:absolute;left:0;top:0;width:1920px;height:1080px;border:0;transform-origin:0 0;pointer-events:none}
+
+/* question panel */
+.qp{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.qp-body{flex:1;overflow:auto;padding:14px 18px 18px;display:flex;flex-direction:column;gap:14px}
+.qp-empty{flex:1;display:grid;place-items:center;text-align:center;color:var(--faint);padding:30px}
+.qp-empty p{max-width:380px}
+.qp-empty b{color:var(--text)}
+.qmeta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tag{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:7px;background:var(--panel-2);font:600 12.5px/1 var(--f-text);color:var(--muted)}
+.tag.gold{background:rgba(255,200,58,.14);color:var(--gold)}
+.tag.price{font:800 13px/1 var(--f-display);color:var(--gold)}
+.qtext{font:500 19px/1.4 var(--f-text)}
+.qitems{list-style:none;display:flex;flex-direction:column;gap:4px;font-size:15px}
+.qitems li{display:flex;gap:10px;padding:6px 10px;border-radius:7px;background:rgba(255,255,255,.04)}
+.qitems li b{font-family:var(--f-data);color:var(--gold);min-width:46px}
+.answer{padding:14px 16px;border-radius:10px;background:rgba(255,200,58,.10);box-shadow:inset 0 0 0 1px rgba(255,200,58,.35)}
+.answer .lbl{font:700 11.5px/1 var(--f-text);color:var(--gold);text-transform:uppercase;letter-spacing:.08em}
+.answer .txt{margin-top:7px;font:700 20px/1.3 var(--f-text);color:#ffe7a6}
+.src{font-size:13.5px;color:var(--muted)}
+.src b{color:var(--text);font-weight:600}
+.note{font-size:13.5px;color:var(--muted);padding:10px 12px;border-radius:9px;background:rgba(255,255,255,.04)}
+.hintbox{font-size:14px;color:#ffe7a6;padding:10px 12px;border-radius:9px;background:rgba(255,200,58,.07)}
+.qp-actions{display:flex;gap:8px;flex-wrap:wrap;padding:12px 18px;border-top:1px solid var(--line);background:rgba(0,0,0,.15)}
+.step{padding:12px 14px;border-radius:10px;background:var(--panel-2);display:flex;flex-direction:column;gap:10px}
+.step h3{font:700 14px/1.2 var(--f-text)}
+.step p{font-size:13.5px;color:var(--muted)}
+.pick{display:flex;flex-wrap:wrap;gap:6px}
+.field{display:flex;align-items:center;gap:8px}
+.field input{width:130px;height:36px;padding:0 10px;border-radius:8px;background:#0b0d11;border:1px solid var(--line-2);font-family:var(--f-data)}
+
+/* timer */
+.timerbox{display:flex;align-items:center;gap:8px;padding:0 18px 12px;flex-wrap:wrap}
+.tval{font:700 26px/1 var(--f-data);font-variant-numeric:tabular-nums;min-width:56px}
+.tval.low{color:var(--down)}
+
+/* teams */
+.teams{display:flex;gap:10px;padding:12px 16px 14px;border-top:1px solid var(--line);background:#0d0f12;overflow-x:auto}
+.tm{flex:1;min-width:190px;padding:10px 12px;border-radius:11px;background:var(--panel);box-shadow:inset 0 0 0 1px var(--line);display:flex;flex-direction:column;gap:8px}
+.tm.chooser{box-shadow:inset 0 0 0 2px var(--gold)}
+.tm-top{display:flex;align-items:center;gap:8px}
+.tm-n{flex:1;min-width:0;font:600 14px/1.2 var(--f-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tm-k{font:600 11px/1 var(--f-data);color:var(--faint)}
+.tm-s{font:700 24px/1 var(--f-data);font-variant-numeric:tabular-nums}
+.tm-s.neg{color:var(--down)}
+.tm-b{display:flex;gap:6px}
+.tm-b .btn{flex:1;height:32px;padding:0 8px;justify-content:center;font-size:13px}
+.tm-b .btn.sq{flex:none;width:32px;padding:0}
+.chooserbtn{font:600 11px/1 var(--f-text);color:var(--faint);padding:4px 6px;border-radius:5px}
+.tm.chooser .chooserbtn{color:var(--gold-ink);background:var(--gold)}
+
+/* setup */
+.setup{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:
+  #1a1d23;padding:24px}
+.setup.hide{display:none}
+.su{width:min(640px,100%);display:flex;flex-direction:column;gap:22px}
+.su h1{font:900 64px/.95 var(--f-display);color:var(--gold);text-transform:uppercase;letter-spacing:-.03em}
+.su .lead{font-size:17px;color:var(--muted);margin-top:-6px}
+.su-card{padding:20px;border-radius:16px;background:#23272f;box-shadow:inset 0 0 0 1px var(--line-2);display:flex;flex-direction:column;gap:14px}
+.su-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.su-row label{font-weight:600}
+.stepper{display:flex;align-items:center;gap:6px}
+.stepper span{font:700 20px/1 var(--f-data);min-width:30px;text-align:center}
+.names{display:grid;grid-template-columns:minmax(0,1fr) 96px minmax(0,1fr) 96px;gap:8px}
+.names input{min-width:0;height:42px;padding:0 12px;border-radius:9px;background:#0b0d11;border:1px solid var(--line-2)}
+.names input.tk{font:700 16px/1 var(--f-data);text-transform:uppercase;letter-spacing:.08em;color:var(--gold);text-align:center}
+.names input::placeholder{color:var(--faint)}
+.su-help{font-size:13.5px;color:var(--muted);line-height:1.6}
+.su-actions{display:flex;gap:10px;flex-wrap:wrap}
+
+.toast{position:fixed;left:50%;bottom:120px;transform:translate(-50%,20px);opacity:0;padding:10px 16px;border-radius:10px;background:#2e333c;box-shadow:0 10px 30px rgba(0,0,0,.4);font-weight:600;transition:all .3s var(--ease-out);pointer-events:none;z-index:30}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:1100px){.main{grid-template-columns:1fr;overflow:auto}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">Своя игра<small>Пульт ведущего</small></div>
+    <div class="status" id="status"></div>
+    <div class="spacer"></div>
+    <button class="btn primary" id="btnScreen"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Экран для проектора</button>
+    <button class="btn" id="btnSummary">Итоги сессии</button>
+    <button class="btn" id="btnNext">Следующий раунд</button>
+    <button class="btn" id="btnFinal">К финалу</button>
+    <button class="btn" id="btnEnd">Завершить игру</button>
+    <button class="btn ghost" id="btnSound" title="Звук"></button>
+    <button class="btn ghost" id="btnUndo" title="Отменить последнее начисление">Отменить</button>
+  </header>
+
+  <main class="main">
+    <div class="col">
+      <section class="panel">
+        <div class="ph"><h2 id="boardTitle">Табло</h2><button class="btn ghost" id="btnBoard" style="height:28px">Показать табло</button></div>
+        <div class="mb" id="mb"></div>
+      </section>
+      <section class="panel">
+        <div class="ph"><h2>Что видит зал</h2></div>
+        <div class="pv"><div class="pv-frame" id="pvFrame"><iframe id="pv" src="screen.html" title="Превью экрана"></iframe></div></div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="panel qp">
+        <div class="ph"><h2>Текущий вопрос</h2><div class="tag" id="viewTag"></div></div>
+        <div class="qp-body" id="qp"></div>
+        <div class="timerbox" id="timerbox">
+          <span class="tval" id="tval">—</span>
+          <button class="btn" data-t="15">15 с</button>
+          <button class="btn" data-t="30">30 с</button>
+          <button class="btn" data-t="60">60 с</button>
+          <button class="btn" id="tToggle">Пауза <kbd>Пробел</kbd></button>
+          <button class="btn ghost" id="tReset">Сброс</button>
+        </div>
+        <div class="qp-actions" id="qa"></div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="teams" id="teams"></footer>
+</div>
+
+<div class="setup" id="setup">
+  <div class="su">
+    <div>
+      <h1>Своя<br>игра</h1>
+    </div>
+    <p class="lead" id="suLead"></p>
+    <div class="su-card">
+      <div class="su-row"><label>Количество команд</label>
+        <div class="stepper"><button class="btn sq" id="suMinus" style="width:36px;padding:0;justify-content:center">−</button><span id="suCount">3</span><button class="btn" id="suPlus" style="width:36px;padding:0;justify-content:center">+</button></div>
+      </div>
+      <div class="names" id="suNames"></div>
+    </div>
+    <div class="su-help">
+      1. Нажмите «Экран для проектора» и перетащите окно на проектор, там нажмите <kbd>F</kbd>.<br>
+      2. Клавиши на пульте: <kbd>Пробел</kbd> таймер, <kbd>Enter</kbd> ответ, <kbd>Esc</kbd> на табло, <kbd>1</kbd>–<kbd>6</kbd> верно, <kbd>Shift</kbd>+<kbd>1</kbd>–<kbd>6</kbd> неверно.
+    </div>
+    <div class="su-actions">
+      <button class="btn gold big" id="suStart">Начать игру</button>
+      <button class="btn big" id="suScreen">Экран для проектора</button>
+      <button class="btn big ghost" id="suResume" style="display:none">Продолжить сохранённую игру</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="questions.js"></script>
+<script>
+(() => {
+  const D = window.GAME;
+  const $ = id => document.getElementById(id);
+  const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const fmt = n => (n < 0 ? '−' : '') + Math.abs(n).toLocaleString('ru-RU').replace(/ /g, ' ');
+
+  const ICON = {
+    cat: '<circle cx="12" cy="12" r="9"/><path d="M3.5 13.5c2.2-1.6 4.4-1.6 6.6 0s4.4 1.6 6.6 0 2.9-1.2 3.8-.6"/><circle cx="12" cy="8" r="1.4" fill="currentColor"/>',
+    auction: '<path d="M14.5 3.5l6 6"/><path d="M11 7l6 6"/><path d="M12.75 5.25l-4.5 4.5 6 6 4.5-4.5"/><path d="M10.5 12 3.5 19"/>',
+    reg: '<path d="M12 2.5 4 5.5v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10v-6z"/>',
+    order: '<path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>'
+  };
+  const svg = (k, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k]}</svg>`;
+
+  const REG = {
+    stress:  { title: 'Стресс-тест', rule: 'На ответ — всего 15 секунд.' },
+    insider: { title: 'Инсайдерская информация', rule: 'Можно взять подсказку. Ошибка после подсказки — минус вдвое.' },
+    revoke:  { title: 'Отзыв лицензии', rule: 'Клетка сгорает. Очков никто не получает, ход переходит к следующей команде.' },
+    order:   { title: 'Предписание Банка России', rule: 'Отвечает только команда, выбравшая вопрос. Ошибка — минус стоимость.' }
+  };
+  const SPECIAL = {
+    cat: { title: 'Тёмный пул · кот в мешке', rule: 'Вопрос из другой темы. Выбирающая команда передаёт его любой другой команде.' },
+    auction: { title: 'Аукцион открытия', rule: 'Команды торгуются за право ответить. Ставка — не меньше стоимости вопроса.' }
+  };
+  const specTitle = sp => sp.kind === 'reg' ? REG[sp.card].title : SPECIAL[sp.kind].title;
+
+  /* ================= tickers ================= */
+  const TR = { а:'A',б:'B',в:'V',г:'G',д:'D',е:'E',ё:'E',ж:'ZH',з:'Z',и:'I',й:'Y',к:'K',л:'L',м:'M',н:'N',о:'O',п:'P',р:'R',с:'S',т:'T',у:'U',ф:'F',х:'H',ц:'C',ч:'CH',ш:'SH',щ:'SH',ъ:'',ы:'Y',ь:'',э:'E',ю:'U',я:'YA' };
+  function makeTicker(name, taken) {
+    const lat = [...name.toLowerCase()].map(c => TR[c] ?? (/[a-z0-9]/.test(c) ? c.toUpperCase() : '')).join('');
+    if (!lat) return uniq('TEAM', taken);
+    const cons = lat[0] + lat.slice(1).replace(/[AEIOUY]/g, '');
+    let t = (cons.length >= 4 ? cons : lat).slice(0, 4).padEnd(4, 'X');
+    return uniq(t, taken);
+  }
+  function uniq(t, taken) { let u = t, n = 1; while (taken.includes(u)) u = t.slice(0, 3) + (n++); return u; }
+
+  /* ================= state ================= */
+  const KEY = 'svoya-igra-state-v2';
+  let G = fresh();
+  function fresh() {
+    return { view: 'setup', roundIdx: 0, teams: [], chooser: 0, played: {}, cellInfo: {}, cur: null, index: [],
+             timer: { dur: 0, remaining: 0, endsAt: null }, final: null, history: [] };
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(G)); } catch (e) {} }
+  function load() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
+
+  const round = () => D.rounds[G.roundIdx];
+  const qOf = (ti, i) => round().themes[ti].questions[i];
+  const ck = (ti, i) => `${G.roundIdx}-${ti}-${i}`;
+  const total = () => G.teams.reduce((s, t) => s + t.score, 0);
+  const tk = i => G.teams[i] ? G.teams[i].ticker : '';
+
+  /* ================= sound ================= */
+  let AC = null, soundOn = true;
+  try { soundOn = localStorage.getItem('svoya-sound') !== 'off'; } catch (e) {}
+  function ac() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume(); return AC; }
+  function tone(f, d, { type = 'sine', vol = .14, at = 0, to = null } = {}) {
+    if (!soundOn) return;
+    const a = ac(), t = a.currentTime + at, o = a.createOscillator(), g = a.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + d);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + .01); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t + d + .05);
+  }
+  function noise(d, { at = 0, vol = .2, freq = 1800 } = {}) {
+    if (!soundOn) return;
+    const a = ac(), t = a.currentTime + at, len = Math.floor(a.sampleRate * d), b = a.createBuffer(1, len, a.sampleRate), ch = b.getChannelData(0);
+    for (let k = 0; k < len; k++) ch[k] = (Math.random() * 2 - 1) * Math.pow(1 - k / len, 3);
+    const src = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+    src.buffer = b; f.type = 'bandpass'; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(a.destination); src.start(t);
+  }
+  const sfx = {
+    open:    () => tone(320, .35, { type: 'triangle', to: 900, vol: .07 }),
+    correct: () => { tone(660, .18, { type: 'triangle' }); tone(990, .32, { type: 'triangle', at: .12 }); },
+    wrong:   () => tone(170, .45, { type: 'sawtooth', vol: .07, to: 110 }),
+    tick:    () => tone(1400, .05, { type: 'square', vol: .04 }),
+    gong:    () => { tone(196, 1.6, { vol: .16 }); tone(294, 1.4, { vol: .08, at: .02 }); },
+    flaps:   (n = 10) => { for (let k = 0; k < n; k++) noise(.03, { at: k * .07 + Math.random() * .02, vol: .35, freq: 2600 }); },
+    bell:    () => { [[523, 1], [1250, .45], [1660, .3], [2090, .2], [3350, .12]].forEach(([f, v]) => { tone(f, 3.2, { vol: .12 * v }); tone(f, 3.2, { vol: .12 * v, at: .9 }); }); },
+    news:    () => { [0, .18, .36].forEach((at, k) => tone(k === 2 ? 1175 : 880, .14, { type: 'square', vol: .05, at })); },
+    stamp:   () => { noise(.18, { vol: .9, freq: 180 }); tone(70, .25, { vol: .2 }); },
+    boot:    () => { tone(55, 1.6, { type: 'sawtooth', vol: .05, to: 110 }); [.62, .7, .8, .95, 1.05, 1.18].forEach(at => noise(.04, { at, vol: .5, freq: 3200 })); tone(880, .5, { type: 'triangle', at: 1.3, vol: .05 }); },
+    glitch:  () => { noise(.3, { vol: .6, freq: 900 }); tone(140, .12, { type: 'square', vol: .05 }); tone(95, .12, { type: 'square', vol: .05, at: .14 }); },
+    breaker: () => { noise(.12, { vol: 1, freq: 140 }); tone(60, .6, { vol: .18, to: 40 }); },
+    win:     () => { sfx.bell(); [523, 659, 784, 1047].forEach((f, n) => tone(f, .4, { type: 'triangle', at: 1.2 + n * .14, vol: .09 })); }
+  };
+
+  /* ================= screens ================= */
+  const targets = new Set();
+  let projWin = null;
+  addEventListener('message', e => { if (e.data && e.data.type === 'hello' && e.source) { targets.add(e.source); send(null, e.source); } });
+
+  function newsFor(c) {
+    const q = qOf(c.ti, c.i), sp = q.special, theme = round().themes[c.ti].name;
+    if (!sp) return null;
+    const ch = tk(c.chooser);
+    const map = {
+      cat:     { headline: `Сделка в тёмном пуле: ${ch} передаёт вопрос другой команде`, stamp: false },
+      auction: { headline: `Биржа объявила аукцион открытия по теме «${theme}»`, stamp: false },
+      stress:  { headline: `Банк России проводит внеплановый стресс-тест ${ch}`, stamp: false },
+      insider: { headline: `В сеть утекла инсайдерская информация по теме «${theme}»`, stamp: false },
+      revoke:  { headline: `Банк России отозвал лицензию у ${ch}`, stamp: true },
+      order:   { headline: `${ch} получает предписание Банка России`, stamp: false }
+    };
+    const key = sp.kind === 'reg' ? sp.card : sp.kind;
+    const info = sp.kind === 'reg' ? REG[sp.card] : SPECIAL[sp.kind];
+    return { kind: sp.kind, card: sp.card || null, title: info.title, rule: info.rule, ...map[key] };
+  }
+
+  function pub() {
+    const r = round();
+    const s = {
+      view: G.view === 'setup' ? 'intro' : G.view,
+      subtitle: D.subtitle, roundIdx: G.roundIdx, roundName: r.name, roundTitle: r.title,
+      themes: r.themes.map((t, ti) => ({ name: t.name, cells: t.questions.map((q, i) => {
+        const inf = G.cellInfo[ck(ti, i)];
+        return { price: q.price, played: !!G.played[ck(ti, i)], info: inf ? { ...inf, ticker: inf.by != null ? tk(inf.by) : null } : null };
+      }) })),
+      teams: G.teams.map(t => ({ name: t.name, ticker: t.ticker, score: t.score, delta: t.delta || 0, streak: t.streak || 0, candles: t.candles })),
+      index: G.index, chooser: G.chooser, timer: G.timer, cur: null, final: null
+    };
+    if (G.cur) {
+      const c = G.cur, q = qOf(c.ti, c.i), sp = q.special, isCat = sp && sp.kind === 'cat';
+      s.cur = {
+        key: c.key, cell: `${c.ti}-${c.i}`, theme: isCat ? sp.theme : r.themes[c.ti].name, price: q.price,
+        text: isCat ? sp.q : q.q, isCase: !!q.case, items: q.type === 'order' ? q.items : null, display: c.display,
+        special: sp ? { kind: sp.kind, title: specTitle(sp) } : null, news: newsFor(c),
+        answering: c.answering, bid: c.bid, hint: c.hintShown ? sp.hint : null,
+        answer: c.answerShown ? (isCat ? sp.a : q.a) : null
+      };
+    }
+    if (G.final) {
+      const f = G.final;
+      const candles = {};
+      f.players.forEach(i => {
+        const o = f.open[i], b = f.bets[i] || 0, r2 = f.results[i];
+        candles[i] = { o, h: o + b, l: o - b, c: r2 == null ? o : r2 ? o + b : o - b, pending: r2 == null };
+      });
+      s.final = { stage: f.stage, theme: D.final.theme, q: D.final.q, players: f.players, betsIn: f.betsIn,
+        results: f.results, candles, answer: f.stage === 'reveal' ? D.final.a : null };
+    }
+    return s;
+  }
+  function send(cue, only) {
+    const msg = { type: 'state', state: pub(), cue };
+    (only ? [only] : [...targets]).forEach(w => { try { w.postMessage(msg, '*'); } catch (e) { targets.delete(w); } });
+  }
+  function commit(cue) { save(); render(); send(cue); }
+  function openScreen() {
+    if (projWin && !projWin.closed) { projWin.focus(); return; }
+    projWin = window.open('screen.html', 'svoya-igra-screen', 'popup=yes,width=1280,height=760');
+    if (!projWin) toast('Браузер заблокировал окно — разрешите всплывающие окна');
+  }
+
+  /* ================= candles ================= */
+  function pushIndexCandle(o, c, wick) {
+    G.index.push({ o, c, h: Math.max(o, c) + wick, l: Math.min(o, c) - wick });
+  }
+  function adjustLast(t, d) {
+    const cs = G.teams[t].candles;
+    if (cs.length) { const c = cs[cs.length - 1]; c.c += d; c.h = Math.max(c.h, c.c); c.l = Math.min(c.l, c.c); }
+    if (G.index.length) { const c = G.index[G.index.length - 1]; c.c += d; c.h = Math.max(c.h, c.c); c.l = Math.min(c.l, c.c); }
+  }
+
+  /* ================= actions ================= */
+  function startGame(list) {
+    G = fresh();
+    G.teams = list.map(([n, t]) => ({ name: n, ticker: t, score: 0, delta: 0, streak: 0, candles: [] }));
+    G.view = 'intro';
+    $('setup').classList.add('hide');
+    sfx.boot();
+    commit('boot');
+  }
+  function showRoundIntro() { if (G.cur) closeQuestion(true); G.view = 'roundIntro'; stopTimer(true); sfx.flaps(8); setTimeout(sfx.bell, 380); commit('round'); }
+  function showBoard() { if (G.cur) closeQuestion(true); G.view = 'board'; commit(); }
+  function showSummary() { if (G.cur) closeQuestion(true); stopTimer(true); G.view = 'summary'; sfx.flaps(14); commit('summary'); }
+
+  function openCell(ti, i) {
+    if (['setup', 'final', 'winner'].includes(G.view)) return;
+    if (G.played[ck(ti, i)]) {
+      if (!confirm('Этот вопрос уже сыгран. Открыть снова?')) return;
+      delete G.played[ck(ti, i)]; delete G.cellInfo[ck(ti, i)];
+    }
+    if (G.cur && G.cur.key !== ck(ti, i)) closeQuestion(true);
+    const q = qOf(ti, i), sp = q.special;
+    G.cur = { key: ck(ti, i), ti, i, chooser: G.chooser, answering: null, bid: null, hintShown: false, answerShown: false,
+              display: q.type === 'order' ? shuffled(q.items.length) : null, wrong: [], winner: null,
+              open: G.teams.map(t => t.score), openTotal: total() };
+    stopTimer(true);
+    if (sp && sp.kind === 'reg' && sp.card === 'order') G.cur.answering = G.chooser;
+    if (sp) { G.view = 'news'; sfx.glitch(); setTimeout(sfx.news, 340); if (sp.kind === 'reg' && sp.card === 'revoke') setTimeout(sfx.stamp, 2250); }
+    else { G.view = 'question'; sfx.open(); }
+    commit('open');
+  }
+  function shuffled(n) { let a; do { a = [...Array(n).keys()].sort(() => Math.random() - .5); } while (a.every((v, k) => v === k)); return a; }
+  function toQuestion() {
+    const sp = qOf(G.cur.ti, G.cur.i).special;
+    G.view = 'question';
+    if (sp && sp.kind === 'reg' && sp.card === 'stress') startTimer(15, true);
+    sfx.open(); commit();
+  }
+  function revealAnswer() { if (!G.cur) return; G.cur.answerShown = true; stopTimer(); commit(); }
+
+  function closeQuestion(silent, burned) {
+    const c = G.cur; if (!c) return;
+    const q = qOf(c.ti, c.i), sp = q.special;
+    const v = c.bid || q.price;
+    const single = sp && (sp.kind === 'cat' || sp.kind === 'auction' || (sp.kind === 'reg' && sp.card === 'order'));
+    const mult = sp && sp.kind === 'reg' && sp.card === 'insider' && c.hintShown ? 2 : 1;
+    G.teams.forEach((t, k) => {
+      const o = c.open[k] ?? t.score, cl = t.score;
+      const eligible = !burned && (c.winner === k || c.wrong.includes(k) || (single && c.answering === k));
+      const h = Math.max(o, cl, eligible ? o + v : o), l = Math.min(o, cl, eligible ? o - v * mult : o);
+      t.candles.push({ o, c: cl, h, l, r: G.roundIdx, lbl: `${round().themes[c.ti].name} · ${q.price}` });
+    });
+    const to = total();
+    pushIndexCandle(c.openTotal, to, burned ? 0 : v * .5);
+    let stamp = null;
+    if (burned) stamp = 'revoked';
+    else if (sp && sp.kind === 'reg' && sp.card === 'order') stamp = c.winner != null ? 'done' : 'failed';
+    const wc = c.winner != null ? G.teams[c.winner].candles.at(-1) : { o: c.openTotal, c: to, h: Math.max(c.openTotal, to), l: Math.min(c.openTotal, to) };
+    G.cellInfo[c.key] = { by: c.winner, stamp, candle: wc };
+    G.played[c.key] = true;
+    G.cur = null; stopTimer(true);
+
+    if (!silent) {
+      const moved = G.teams.some((t, k) => t.score !== (c.open[k] ?? t.score));
+      if (moved) {
+        const up = G.teams.some((t, k) => t.score > c.open[k]);
+        setTimeout(() => tone(up ? 300 : 700, 1.2, { type: 'triangle', to: up ? 900 : 220, vol: .05 }), 300);
+        setTimeout(() => sfx.flaps(10), 2250);
+      }
+      G.view = 'board'; commit('close');
+    }
+  }
+  function burnCell() {
+    G.chooser = (G.chooser + 1) % G.teams.length;
+    closeQuestion(true, true);
+    G.view = 'board'; commit('close');
+  }
+  const value = () => G.cur ? (G.cur.bid || qOf(G.cur.ti, G.cur.i).price) : 0;
+  function addScore(t, d, label) {
+    G.teams.forEach(x => x.delta = 0);
+    G.teams[t].score += d; G.teams[t].delta = d;
+    G.history.push({ t, d, label, inQ: !!G.cur });
+    if (!G.cur) sfx.flaps(6);
+  }
+  function judge(t, correct) {
+    if (t >= G.teams.length) return;
+    if (G.view === 'final') return judgeFinal(t, correct);
+    if (!G.cur || G.view !== 'question') { toast('Сначала откройте вопрос'); return; }
+    const sp = qOf(G.cur.ti, G.cur.i).special, v = value();
+    if (correct) {
+      addScore(t, v, 'верно'); G.chooser = t; G.cur.winner = t; G.cur.answering = null; G.cur.answerShown = true; stopTimer();
+      G.teams[t].streak = (G.teams[t].streak || 0) + 1;
+      sfx.correct(); commit('correct');
+    } else {
+      const mult = sp && sp.kind === 'reg' && sp.card === 'insider' && G.cur.hintShown ? 2 : 1;
+      addScore(t, -v * mult, 'неверно'); G.cur.wrong.push(t); G.teams[t].streak = 0;
+      if (G.cur.answering === t) G.cur.answering = null;
+      const single = sp && (sp.kind === 'cat' || sp.kind === 'auction' || (sp.kind === 'reg' && sp.card === 'order'));
+      if (single || G.cur.wrong.length >= G.teams.length) { G.cur.answerShown = true; stopTimer(); }
+      sfx.wrong(); commit('wrong');
+    }
+  }
+  function manual(t, d) {
+    addScore(t, d, 'вручную');
+    if (!G.cur) adjustLast(t, d);
+    commit(d > 0 ? 'correct' : 'wrong');
+  }
+  function undo() {
+    const h = G.history.pop(); if (!h) { toast('Нечего отменять'); return; }
+    G.teams.forEach(x => x.delta = 0);
+    G.teams[h.t].score -= h.d; G.teams[h.t].delta = -h.d;
+    if (!G.cur && !(G.final && G.view === 'final')) adjustLast(h.t, -h.d);
+    if (G.final && h.label === 'финал') delete G.final.results[h.t];
+    toast(`Отменено: ${G.teams[h.t].name} ${h.d > 0 ? '−' : '+'}${fmt(Math.abs(h.d))}`); commit();
+  }
+  function nextRound() {
+    if (G.roundIdx >= D.rounds.length - 1) { toast('Это последний раунд — дальше финал'); return; }
+    if (G.cur) closeQuestion(true);
+    G.roundIdx++; showRoundIntro();
+  }
+
+  /* ---------- final ---------- */
+  function toFinal() {
+    if (G.cur) closeQuestion(true);
+    stopTimer(true);
+    let players = G.teams.map((t, i) => i).filter(i => G.teams[i].score > 0);
+    if (!players.length) players = G.teams.map((t, i) => i);
+    G.final = { stage: 'theme', players, bets: {}, betsIn: {}, results: {}, open: G.teams.map(t => t.score), openTotal: total(), closed: false };
+    G.view = 'final'; sfx.breaker(); commit();
+  }
+  function finalStage(st) {
+    G.final.stage = st;
+    if (st === 'question') startTimer(60, true);
+    if (st === 'reveal') stopTimer();
+    sfx.open(); commit();
+  }
+  function judgeFinal(t, correct) {
+    const f = G.final;
+    if (f.stage !== 'reveal' || !f.players.includes(t) || f.results[t] != null) return;
+    const b = f.bets[t] || 0;
+    f.results[t] = correct;
+    addScore(t, correct ? b : -b, 'финал');
+    sfx[correct ? 'correct' : 'wrong'](); commit(correct ? 'correct' : 'wrong');
+  }
+  function closeFinalCandles() {
+    const f = G.final; if (!f || f.closed) return;
+    f.players.forEach(i => { const o = f.open[i], b = f.bets[i] || 0, t = G.teams[i]; t.candles.push({ o, c: t.score, h: Math.max(o + b, t.score), l: Math.min(o - b, t.score), r: G.roundIdx, lbl: 'Финал' }); });
+    pushIndexCandle(f.openTotal, total(), 0);
+    f.closed = true;
+  }
+  function toWinner() { if (G.cur) closeQuestion(true); stopTimer(true); closeFinalCandles(); G.view = 'winner'; sfx.flaps(8); setTimeout(sfx.win, 380); commit(); }
+
+  /* ---------- timer ---------- */
+  let tInt = 0, lastTick = -1;
+  function startTimer(sec, silent) { G.timer = { dur: sec, remaining: sec, endsAt: Date.now() + sec * 1000 }; loopTimer(); if (!silent) commit(); }
+  function toggleTimer() {
+    const t = G.timer;
+    if (!t.dur) { startTimer(30); return; }
+    if (t.endsAt) { t.remaining = Math.max(0, (t.endsAt - Date.now()) / 1000); t.endsAt = null; }
+    else if (t.remaining > 0) { t.endsAt = Date.now() + t.remaining * 1000; loopTimer(); }
+    else { startTimer(t.dur); return; }
+    commit();
+  }
+  function stopTimer(clear) {
+    const t = G.timer;
+    if (t.endsAt) { t.remaining = Math.max(0, (t.endsAt - Date.now()) / 1000); t.endsAt = null; }
+    if (clear) G.timer = { dur: 0, remaining: 0, endsAt: null };
+  }
+  function loopTimer() {
+    clearInterval(tInt);
+    tInt = setInterval(() => {
+      const t = G.timer;
+      if (!t.endsAt) { clearInterval(tInt); renderTimer(); return; }
+      const rem = (t.endsAt - Date.now()) / 1000, s = Math.ceil(rem);
+      if (s !== lastTick && s <= 5 && s > 0) sfx.tick();
+      lastTick = s;
+      if (rem <= 0) { t.endsAt = null; t.remaining = 0; clearInterval(tInt); sfx.breaker(); setTimeout(sfx.gong, 250); commit(); return; }
+      renderTimer();
+    }, 100);
+  }
+  function renderTimer() {
+    const t = G.timer, el = $('tval');
+    if (!t.dur) { el.textContent = '—'; el.classList.remove('low'); $('tToggle').innerHTML = 'Старт <kbd>Пробел</kbd>'; return; }
+    const rem = t.endsAt ? Math.max(0, (t.endsAt - Date.now()) / 1000) : t.remaining;
+    el.textContent = Math.ceil(rem) + ' с'; el.classList.toggle('low', rem <= 5);
+    $('tToggle').innerHTML = (t.endsAt ? 'Пауза' : rem > 0 ? 'Продолжить' : 'Заново') + ' <kbd>Пробел</kbd>';
+  }
+
+  /* ================= render (console) ================= */
+  function render() {
+    const r = round();
+    const names = { setup: 'Настройка', intro: 'Заставка', roundIntro: 'Колокол и темы', board: 'Табло', news: 'Срочная новость', question: 'Вопрос', summary: 'Итоги сессии', final: 'Финал', winner: 'IPO победителя' };
+    $('status').innerHTML = `<b>${esc(r.name)}</b> · ${esc(r.title)}`;
+    $('viewTag').textContent = 'На экране: ' + names[G.view];
+    $('boardTitle').textContent = `Табло · ${r.name}`;
+    $('btnNext').disabled = G.roundIdx >= D.rounds.length - 1 && G.view !== 'intro';
+    $('btnSound').textContent = soundOn ? 'Звук вкл' : 'Звук выкл';
+    $('btnBoard').textContent = G.view === 'intro' ? 'Открыть торги' : G.view === 'roundIntro' ? 'Показать табло' : 'На табло';
+    $('mb').innerHTML = r.themes.map((t, ti) => `<div class="mb-row"><div class="mb-theme">${esc(t.name)}</div>${t.questions.map((q, i) => {
+      const k = ck(ti, i), sp = q.special, inf = G.cellInfo[k];
+      const ic = sp ? `<span class="sp" title="${specTitle(sp)}">${svg(sp.kind)}</span>` : q.type === 'order' ? `<span class="sp" title="Расставить по порядку">${svg('order')}</span>` : '';
+      const lbl = G.played[k] ? (inf && inf.by != null ? tk(inf.by) : '—') : q.price;
+      return `<button class="mb-cell${G.played[k] ? ' played' : ''}${G.cur && G.cur.key === k ? ' current' : ''}" data-ti="${ti}" data-i="${i}">${lbl}${ic}</button>`;
+    }).join('')}</div>`).join('');
+    renderQP(); renderTeams(); renderTimer();
+  }
+
+  function renderQP() {
+    const qp = $('qp'), qa = $('qa');
+    $('timerbox').style.display = (G.view === 'question' || (G.view === 'final' && G.final && G.final.stage === 'question')) ? 'flex' : 'none';
+    if (G.view === 'final') return renderFinalQP(qp, qa);
+    if (G.view === 'winner') {
+      qp.innerHTML = `<div class="qp-empty"><p>На экране — IPO победителя и итоги.</p></div>`;
+      qa.innerHTML = `<button class="btn" data-act="board">Вернуться к табло</button><button class="btn ghost" data-act="new">Новая игра</button>`;
+      return;
+    }
+    if (G.view === 'summary') {
+      qp.innerHTML = `<div class="qp-empty"><p>Зал видит свечные графики всех команд за игру.<br>Хороший момент прокомментировать ход торгов.</p></div>`;
+      qa.innerHTML = `<button class="btn gold" data-act="board">Вернуться к табло</button>` + (G.roundIdx < D.rounds.length - 1 ? `<button class="btn" data-act="next">Следующий раунд</button>` : `<button class="btn" data-act="final">К финалу</button>`);
+      return;
+    }
+    if (!G.cur) {
+      const hints = { intro: 'На экране заставка. Нажмите <b>«Открыть торги»</b> — прозвучит колокол и появятся темы раунда.',
+        roundIntro: 'Колокол прозвенел, зал видит темы. Нажмите <b>«Показать табло»</b>.',
+        board: 'Выберите клетку на табло слева — вопрос откроется у всех.<br>Значки спецвопросов видите только вы.' };
+      qp.innerHTML = `<div class="qp-empty"><p>${hints[G.view] || ''}</p></div>`;
+      qa.innerHTML = G.view === 'intro' ? `<button class="btn gold" data-act="roundIntro">Открыть торги</button>` : G.view === 'roundIntro' ? `<button class="btn gold" data-act="board">Показать табло</button>` : '';
+      return;
+    }
+    const c = G.cur, q = qOf(c.ti, c.i), sp = q.special, isCat = sp && sp.kind === 'cat';
+    let tags = `<span class="tag">${esc(round().themes[c.ti].name)}</span><span class="tag price">${q.price}</span>`;
+    if (sp) tags += `<span class="tag gold">${svg(sp.kind, 'i')} ${specTitle(sp)}</span>`;
+    if (q.case) tags += `<span class="tag">Кейс</span>`;
+    if (q.type === 'order') tags += `<span class="tag">${svg('order', 'i')} Порядок</span>`;
+    if (c.bid) tags += `<span class="tag gold">Ставка ${fmt(c.bid)}</span>`;
+    const text = isCat ? sp.q : q.q, ans = isCat ? sp.a : q.a, src = isCat ? sp.src : q.src;
+    let html = `<div class="qmeta">${tags}</div>`;
+    if (isCat) html += `<div class="note">Тема вопроса для зала: <b>${esc(sp.theme)}</b></div>`;
+    let actions = '';
+    if (G.view === 'news') {
+      const n = newsFor(c);
+      html += `<div class="note">Зал видит: <b>${esc(n.headline)}</b></div>`;
+      if (sp.kind === 'cat') {
+        html += `<div class="step"><h3>Кому передать вопрос?</h3><p>${esc(G.teams[c.chooser].name)} передаёт вопрос другой команде.</p><div class="pick">${G.teams.map((t, i) => `<button class="btn${c.answering === i ? ' on' : ''}" data-pick="${i}" ${i === c.chooser ? 'disabled' : ''}>${esc(t.ticker)} · ${esc(t.name)}</button>`).join('')}</div></div>`;
+        actions = `<button class="btn gold" data-act="toQ" ${c.answering == null ? 'disabled' : ''}>Показать вопрос</button>`;
+      } else if (sp.kind === 'auction') {
+        html += `<div class="step"><h3>Аукцион</h3><p>Ставка от ${q.price} до суммы на счёте команды. Победитель аукциона отвечает один.</p>
+          <div class="field"><input id="bid" type="number" min="${q.price}" step="100" value="${c.bid || q.price}"><span class="src">очков</span></div>
+          <div class="pick">${G.teams.map((t, i) => `<button class="btn${c.answering === i ? ' on' : ''}" data-bidteam="${i}">${esc(t.ticker)} · ${esc(t.name)}</button>`).join('')}</div></div>`;
+        actions = `<button class="btn gold" data-act="toQ" ${c.answering == null ? 'disabled' : ''}>Показать вопрос</button>`;
+      } else {
+        html += `<div class="step"><h3>${REG[sp.card].title}</h3><p>${REG[sp.card].rule}</p></div>`;
+        actions = sp.card === 'revoke' ? `<button class="btn gold" data-act="burn">Сжечь клетку — на табло</button>` : `<button class="btn gold" data-act="toQ">Показать вопрос <kbd>Enter</kbd></button>`;
+      }
+      html += `<div class="qtext" style="opacity:.6">${esc(text)}</div><div class="answer"><div class="lbl">Ответ</div><div class="txt">${esc(ans)}</div></div>`;
+      qp.innerHTML = html; qa.innerHTML = actions + `<button class="btn ghost" data-act="board">Отмена, на табло</button>`;
+      return;
+    }
+    html += `<div class="qtext">${esc(text)}</div>`;
+    if (q.type === 'order') html += `<ol class="qitems">${q.items.map(it => `<li><b>${esc(it[1])}</b>${esc(it[0])}</li>`).join('')}</ol>`;
+    html += `<div class="answer"><div class="lbl">Ответ${c.answerShown ? ' · показан залу' : ''}</div><div class="txt">${esc(ans)}</div></div>`;
+    if (src) html += `<div class="src"><b>Источник:</b> ${esc(src)}</div>`;
+    if (q.note) html += `<div class="note">${esc(q.note)}</div>`;
+    if (sp && sp.kind === 'reg' && sp.card === 'insider') html += `<div class="hintbox"><b>Подсказка:</b> ${esc(sp.hint)}</div>`;
+    if (c.answering != null) html += `<div class="note">Отвечает только: <b>${esc(tk(c.answering))} · ${esc(G.teams[c.answering].name)}</b></div>`;
+    actions = c.answerShown ? `<button class="btn gold" data-act="board">На табло <kbd>Esc</kbd></button>`
+                            : `<button class="btn gold" data-act="reveal">Показать ответ <kbd>Enter</kbd></button><button class="btn ghost" data-act="board">Закрыть без ответа</button>`;
+    if (sp && sp.kind === 'reg' && sp.card === 'insider' && !c.hintShown && !c.answerShown) actions += `<button class="btn" data-act="hint">Слить инсайд (подсказка)</button>`;
+    qp.innerHTML = html; qa.innerHTML = actions;
+  }
+
+  function renderFinalQP(qp, qa) {
+    const f = G.final, F = D.final;
+    let html = `<div class="qmeta"><span class="tag gold">Финал</span><span class="tag">${esc(F.theme)}</span></div>`, act = '';
+    if (f.stage === 'theme') { html += `<div class="step"><h3>Тема финала на экране</h3><p>Играют: ${f.players.map(i => esc(tk(i) + ' · ' + G.teams[i].name)).join(', ')}.</p></div>`; act = `<button class="btn gold" data-act="fBets">Принять заявки (ставки)</button>`; }
+    if (f.stage === 'bets') {
+      html += `<div class="step"><h3>Ставки</h3><p>Команды пишут ставки на листках, вы вводите их сюда. Зал видит только «заявка принята».</p>
+        ${f.players.map(i => `<div class="field"><span style="min-width:170px">${esc(tk(i))} · ${esc(G.teams[i].name)}</span><input type="number" min="0" max="${G.teams[i].score}" step="100" data-bet="${i}" value="${f.bets[i] ?? ''}" placeholder="до ${fmt(G.teams[i].score)}"></div>`).join('')}</div>`;
+      act = `<button class="btn gold" data-act="fQ">Показать вопрос</button>`;
+    }
+    if (f.stage === 'question' || f.stage === 'reveal') {
+      html += `<div class="qtext">${esc(F.q)}</div><div class="answer"><div class="lbl">Ответ</div><div class="txt">${esc(F.a)}</div></div>`;
+      if (F.src) html += `<div class="src"><b>Источник:</b> ${esc(F.src)}</div>`;
+      if (F.note) html += `<div class="note">${esc(F.note)}</div>`;
+    }
+    if (f.stage === 'question') act = `<button class="btn gold" data-act="fReveal">Время вышло — к проверке</button>`;
+    if (f.stage === 'reveal') {
+      html += `<div class="step"><h3>Проверка</h3><p>На экране свечи с неизвестным исходом. Отметьте каждую команду — свеча «выстрелит» вверх или вниз.</p>${f.players.map(i => {
+        const r = f.results[i];
+        return `<div class="field"><span style="min-width:200px">${esc(tk(i))} · ставка ${fmt(f.bets[i] || 0)}</span>${r == null
+          ? `<button class="btn ok" data-fj="${i}" data-ok="1">Верно</button><button class="btn no" data-fj="${i}" data-ok="0">Неверно</button>`
+          : `<span class="tag" style="color:${r ? 'var(--up)' : 'var(--down)'}">${r ? 'Верно' : 'Неверно'}</span>`}</div>`;
+      }).join('')}</div>`;
+      act = `<button class="btn gold" data-act="winner">IPO победителя</button>`;
+    }
+    qp.innerHTML = html; qa.innerHTML = act;
+  }
+
+  function renderTeams() {
+    const v = G.cur ? value() : 0, inQ = G.view === 'question' && G.cur;
+    $('teams').innerHTML = G.teams.map((t, i) => `<div class="tm${G.chooser === i ? ' chooser' : ''}">
+      <div class="tm-top"><span class="tm-k">${i + 1}</span><span class="tm-n" title="${esc(t.name)}"><b style="font-family:var(--f-data);color:var(--gold)">${esc(t.ticker)}</b> ${esc(t.name)}</span>
+        <button class="chooserbtn" data-chooser="${i}" title="Сделать выбирающей">${G.chooser === i ? 'выбирает' : 'ход'}</button></div>
+      <div class="tm-s${t.score < 0 ? ' neg' : ''}">${fmt(t.score)}${t.score < 0 ? ' <span style="font-size:12px;color:var(--down)">маржин-колл</span>' : ''}${(t.streak || 0) >= 3 ? ' <span style="font-size:12px;color:var(--up)">ралли</span>' : ''}</div>
+      <div class="tm-b">
+        <button class="btn ok" data-j="${i}" data-ok="1" ${inQ ? '' : 'disabled'}>Верно${inQ ? ' +' + fmt(v) : ''}</button>
+        <button class="btn no" data-j="${i}" data-ok="0" ${inQ ? '' : 'disabled'}>Неверно</button>
+        <button class="btn sq" data-m="${i}" data-d="-100" title="−100">−</button>
+        <button class="btn sq" data-m="${i}" data-d="100" title="+100">+</button>
+      </div></div>`).join('');
+  }
+
+  /* ================= events ================= */
+  document.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || b.disabled) return;
+    ac();
+    if (b.dataset.ti != null) return openCell(+b.dataset.ti, +b.dataset.i);
+    if (b.dataset.j != null) return judge(+b.dataset.j, b.dataset.ok === '1');
+    if (b.dataset.fj != null) return judgeFinal(+b.dataset.fj, b.dataset.ok === '1');
+    if (b.dataset.m != null) return manual(+b.dataset.m, +b.dataset.d);
+    if (b.dataset.chooser != null) { G.chooser = +b.dataset.chooser; return commit(); }
+    if (b.dataset.pick != null) { G.cur.answering = +b.dataset.pick; return commit(); }
+    if (b.dataset.bidteam != null) { const q = qOf(G.cur.ti, G.cur.i); G.cur.bid = Math.max(q.price, +($('bid').value || q.price)); G.cur.answering = +b.dataset.bidteam; return commit(); }
+    if (b.dataset.t) return startTimer(+b.dataset.t);
+    const act = b.dataset.act;
+    if (act === 'toQ') return toQuestion();
+    if (act === 'reveal') return revealAnswer();
+    if (act === 'board') return showBoard();
+    if (act === 'roundIntro') return showRoundIntro();
+    if (act === 'burn') return burnCell();
+    if (act === 'hint') { G.cur.hintShown = true; sfx.news(); return commit(); }
+    if (act === 'next') return nextRound();
+    if (act === 'final') return toFinal();
+    if (act === 'fBets') return finalStage('bets');
+    if (act === 'fQ') return finalStage('question');
+    if (act === 'fReveal') return finalStage('reveal');
+    if (act === 'winner') return toWinner();
+    if (act === 'new') { if (confirm('Начать новую игру? Текущий счёт будет потерян.')) { try { localStorage.removeItem(KEY); } catch (e) {} location.reload(); } }
+  });
+  document.addEventListener('input', e => {
+    const el = e.target;
+    if (el.dataset.bet != null) {
+      const i = +el.dataset.bet, max = Math.max(0, G.teams[i].score);
+      G.final.bets[i] = Math.max(0, Math.min(max, +el.value || 0)); G.final.betsIn[i] = el.value !== '';
+      save(); send();
+    }
+  });
+  document.addEventListener('change', e => { if (e.target.dataset.bet != null) { const i = +e.target.dataset.bet; e.target.value = G.final.bets[i]; } });
+
+  $('btnScreen').onclick = openScreen;
+  $('suScreen').onclick = openScreen;
+  $('btnSummary').onclick = showSummary;
+  $('btnNext').onclick = () => { if (G.view === 'intro') return showRoundIntro(); if (confirm('Перейти к следующему раунду?')) nextRound(); };
+  $('btnFinal').onclick = () => { if (confirm('Перейти к финалу?')) toFinal(); };
+  $('btnEnd').onclick = () => { if (confirm('Завершить игру и показать IPO победителя?')) toWinner(); };
+  $('btnBoard').onclick = () => { if (G.view === 'intro') showRoundIntro(); else showBoard(); };
+  $('btnUndo').onclick = undo;
+  $('btnSound').onclick = () => { soundOn = !soundOn; try { localStorage.setItem('svoya-sound', soundOn ? 'on' : 'off'); } catch (e) {} render(); };
+  $('tToggle').onclick = toggleTimer;
+  $('tReset').onclick = () => { stopTimer(true); commit(); };
+
+  addEventListener('keydown', e => {
+    if (e.target.matches('input, textarea') || G.view === 'setup') return;
+    if (e.code === 'Space') { e.preventDefault(); if (G.view === 'question' || (G.final && G.final.stage === 'question')) toggleTimer(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (G.view === 'question' && G.cur && !G.cur.answerShown) revealAnswer();
+      else if (G.view === 'news') { const sp = qOf(G.cur.ti, G.cur.i).special; if (sp.kind === 'reg' && sp.card !== 'revoke') toQuestion(); }
+    }
+    else if (e.key === 'Escape') { if (G.view === 'question' || G.view === 'news' || G.view === 'summary') showBoard(); }
+    else if (/^Digit[1-6]$/.test(e.code)) { const t = +e.code.slice(5) - 1; if (G.view === 'question') judge(t, !e.shiftKey); }
+    else if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); undo(); }
+  });
+
+  const pvf = $('pvFrame'), pv = $('pv');
+  new ResizeObserver(() => { pv.style.transform = `scale(${pvf.clientWidth / 1920})`; }).observe(pvf);
+  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 2400); }
+
+  /* ================= setup ================= */
+  let count = 3;
+  const names = ['Брокеры', 'Дилеры', 'Регистраторы', 'Депозитарии', 'Маркет-мейкеры', 'Управляющие'];
+  const tickers = Array(6).fill(null);
+  function autoTickers() {
+    const taken = [];
+    return names.slice(0, count).map((n, i) => { const t = (tickers[i] || makeTicker(n || `Команда ${i + 1}`, taken)).toUpperCase().slice(0, 4); taken.push(t); return t; });
+  }
+  function renderSetup() {
+    $('suLead').textContent = D.subtitle;
+    $('suCount').textContent = count;
+    const tks = autoTickers();
+    $('suNames').innerHTML = Array.from({ length: count }, (_, i) => `<input data-name="${i}" value="${esc(names[i])}" placeholder="Команда ${i + 1}" maxlength="28" aria-label="Название команды ${i + 1}"><input class="tk" data-tk="${i}" value="${tks[i]}" maxlength="4" aria-label="Тикер команды ${i + 1}">`).join('');
+  }
+  $('suNames').addEventListener('input', e => {
+    const el = e.target;
+    if (el.dataset.name != null) {
+      names[+el.dataset.name] = el.value;
+      const taken = []; const tks = autoTickers();
+      $('suNames').querySelectorAll('[data-tk]').forEach((inp, i) => { if (!tickers[i]) inp.value = tks[i]; });
+    }
+    if (el.dataset.tk != null) { el.value = el.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); tickers[+el.dataset.tk] = el.value || null; }
+  });
+  $('suMinus').onclick = () => { count = Math.max(2, count - 1); renderSetup(); };
+  $('suPlus').onclick = () => { count = Math.min(6, count + 1); renderSetup(); };
+  $('suStart').onclick = () => {
+    ac();
+    const tks = autoTickers();
+    startGame(names.slice(0, count).map((n, i) => [n.trim() || `Команда ${i + 1}`, tks[i] || `T${i + 1}`]));
+  };
+  const saved = load();
+  if (saved && saved.teams && saved.teams.length && saved.view !== 'setup') {
+    $('suResume').style.display = '';
+    $('suResume').onclick = () => { G = saved; if (G.timer) G.timer.endsAt = null; $('setup').classList.add('hide'); commit(); };
+  }
+  renderSetup();
+  render();
+})();
+</script>
+</body>
+</html>
