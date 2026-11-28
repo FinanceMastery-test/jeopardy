@@ -267,7 +267,8 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
   };
   const SPECIAL = {
     cat: { title: 'Тёмный пул · кот в мешке', rule: 'Вопрос из другой темы. Выбирающая команда передаёт его любой другой команде.' },
-    auction: { title: 'Аукцион открытия', rule: 'Команды торгуются за право ответить. Ставка — не меньше стоимости вопроса.' }
+    auction: { title: 'Аукцион открытия', rule: 'Команды торгуются за право ответить. Ставка — не меньше стоимости вопроса.' },
+    box: { title: 'Чёрный ящик', rule: 'Выбравшая команда решает, не видя вопроса: продать ящик не глядя за половину цены или открыть — верно +цена, неверно −цена.' }
   };
   const specTitle = sp => sp.kind === 'reg' ? REG[sp.card].title : SPECIAL[sp.kind].title;
 
@@ -283,7 +284,9 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
   function uniq(t, taken) { let u = t, n = 1; while (taken.includes(u)) u = t.slice(0, 3) + (n++); return u; }
 
   /* ================= state ================= */
-  const KEY = 'svoya-igra-state-v2';
+  const SOLO = new URLSearchParams(location.search).has('solo') && window.parent !== window;
+  const MEDIA_KIND = { chart: 'график', picture: 'картинка', scheme: 'схема', book: 'стакан заявок', tf: 'верно / неверно', pyramid: 'пирамида норм', mega: 'карта мегарегулятора', day: 'торговый день', fund: 'устройство ПИФа' };
+  const KEY = SOLO ? 'svoya-igra-solo-v2' : 'svoya-igra-state-v2';
   let G = fresh();
   function fresh() {
     return { view: 'setup', roundIdx: 0, teams: [], chooser: 0, played: {}, cellInfo: {}, cur: null, index: [],
@@ -301,8 +304,10 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
   /* ================= sound ================= */
   let AC = null, soundOn = true;
   try { soundOn = localStorage.getItem('svoya-sound') !== 'off'; } catch (e) {}
-  function ac() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume(); return AC; }
+  function ac() {
+    if (SOLO) return null; if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume(); return AC; }
   function tone(f, d, { type = 'sine', vol = .14, at = 0, to = null } = {}) {
+    if (SOLO) { window.parent.postMessage({ type: 'snd', fn: 'tone', args: [f, d, { type, vol, at, to }] }, '*'); return; }
     if (!soundOn) return;
     const a = ac(), t = a.currentTime + at, o = a.createOscillator(), g = a.createGain();
     o.type = type; o.frequency.setValueAtTime(f, t);
@@ -311,6 +316,7 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
     o.connect(g).connect(a.destination); o.start(t); o.stop(t + d + .05);
   }
   function noise(d, { at = 0, vol = .2, freq = 1800 } = {}) {
+    if (SOLO) { window.parent.postMessage({ type: 'snd', fn: 'noise', args: [d, { at, vol, freq }] }, '*'); return; }
     if (!soundOn) return;
     const a = ac(), t = a.currentTime + at, len = Math.floor(a.sampleRate * d), b = a.createBuffer(1, len, a.sampleRate), ch = b.getChannelData(0);
     for (let k = 0; k < len; k++) ch[k] = (Math.random() * 2 - 1) * Math.pow(1 - k / len, 3);
@@ -331,6 +337,8 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
     boot:    () => { tone(55, 1.6, { type: 'sawtooth', vol: .05, to: 110 }); [.62, .7, .8, .95, 1.05, 1.18].forEach(at => noise(.04, { at, vol: .5, freq: 3200 })); tone(880, .5, { type: 'triangle', at: 1.3, vol: .05 }); },
     glitch:  () => { noise(.3, { vol: .6, freq: 900 }); tone(140, .12, { type: 'square', vol: .05 }); tone(95, .12, { type: 'square', vol: .05, at: .14 }); },
     breaker: () => { noise(.12, { vol: 1, freq: 140 }); tone(60, .6, { vol: .18, to: 40 }); },
+    sell:    () => { [1568, 2093, 2637].forEach((f, n) => tone(f, .22, { type: 'triangle', vol: .06, at: n * .07 })); noise(.15, { at: .3, vol: .5, freq: 400 }); tone(523, .5, { type: 'triangle', at: .35, vol: .06, to: 784 }); },
+    unbox:   () => { noise(.5, { vol: .25, freq: 300 }); tone(90, .4, { type: 'sawtooth', vol: .04, to: 60 }); [392, 494, 587, 784].forEach((f, n) => tone(f, 1.4, { vol: .05, at: .55 + n * .08 })); },
     win:     () => { sfx.bell(); [523, 659, 784, 1047].forEach((f, n) => tone(f, .4, { type: 'triangle', at: 1.2 + n * .14, vol: .09 })); }
   };
 
@@ -349,7 +357,8 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
       stress:  { headline: `Банк России проводит внеплановый стресс-тест ${ch}`, stamp: false },
       insider: { headline: `В сеть утекла инсайдерская информация по теме «${theme}»`, stamp: false },
       revoke:  { headline: `Банк России отозвал лицензию у ${ch}`, stamp: true },
-      order:   { headline: `${ch} получает предписание Банка России`, stamp: false }
+      order:   { headline: `${ch} получает предписание Банка России`, stamp: false },
+      box:     { headline: `${ch} вскрывает чёрный ящик Банка России`, stamp: false }
     };
     const key = sp.kind === 'reg' ? sp.card : sp.kind;
     const info = sp.kind === 'reg' ? REG[sp.card] : SPECIAL[sp.kind];
@@ -359,7 +368,7 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
   function pub() {
     const r = round();
     const s = {
-      view: G.view === 'setup' ? 'intro' : G.view,
+      view: G.view === 'setup' ? 'intro' : G.view, setup: G.view === 'setup', canResume: !!canResume,
       subtitle: D.subtitle, roundIdx: G.roundIdx, roundName: r.name, roundTitle: r.title,
       themes: r.themes.map((t, ti) => ({ name: t.name, cells: t.questions.map((q, i) => {
         const inf = G.cellInfo[ck(ti, i)];
@@ -372,9 +381,9 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
       const c = G.cur, q = qOf(c.ti, c.i), sp = q.special, isCat = sp && sp.kind === 'cat';
       s.cur = {
         key: c.key, cell: `${c.ti}-${c.i}`, theme: isCat ? sp.theme : r.themes[c.ti].name, price: q.price,
-        text: isCat ? sp.q : q.q, isCase: !!q.case, items: q.type === 'order' ? q.items : null, display: c.display,
+        text: isCat ? sp.q : q.q, isCase: !!q.case, items: q.type === 'order' ? q.items : null, display: c.display, match: q.type === 'match' ? { left: q.left, right: q.right, pairs: q.pairs } : null, media: MEDIA_KIND[q.type] ? { kind: q.type, chart: q.chart, mode: q.mode, picture: q.picture, scheme: q.scheme, vis: q.vis || null } : null, fall: c.fall ? { ...c.fall } : null, explain: q.explain || null, step: c.step || 1, found: c.critDone ? Object.keys(c.crit || {}).filter(k => c.crit[k]).map(Number) : null,
         special: sp ? { kind: sp.kind, title: specTitle(sp) } : null, news: newsFor(c),
-        answering: c.answering, bid: c.bid, hint: c.hintShown ? sp.hint : null,
+        answering: c.answering, bid: c.bid, hint: c.hintShown ? sp.hint : null, box: c.box || null,
         answer: c.answerShown ? (isCat ? sp.a : q.a) : null
       };
     }
@@ -383,10 +392,14 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
       const candles = {};
       f.players.forEach(i => {
         const o = f.open[i], b = f.bets[i] || 0, r2 = f.results[i];
-        candles[i] = { o, h: o + b, l: o - b, c: r2 == null ? o : r2 ? o + b : o - b, pending: r2 == null };
+        const dd = f.deltas && f.deltas[i] != null ? f.deltas[i] : (r2 ? b : -b);
+        candles[i] = { o, h: Math.max(o + b, o + dd), l: Math.min(o - b, o + dd), c: r2 == null ? o : o + dd, pending: r2 == null };
       });
-      s.final = { stage: f.stage, theme: D.final.theme, q: D.final.q, players: f.players, betsIn: f.betsIn,
-        results: f.results, candles, answer: f.stage === 'reveal' ? D.final.a : null };
+      s.final = { stage: f.stage, theme: D.final.theme, q: D.final.q, players: f.players, betsIn: f.betsIn, auction: !!f.auction, teaser: D.final.teaser || '',
+        bets: f.auction ? f.bets : {}, deltas: f.deltas || {},
+        results: f.results, candles, answer: f.stage === 'reveal' ? D.final.a : null,
+        fin: D.final.steps ? { situation: D.final.situation, parts: D.final.parts, steps: D.final.steps.map(x => x[0]),
+          sol: f.stage === 'reveal' ? { part1: D.final.part1, order: D.final.order, why: D.final.steps.map(x => x[1]) } : null } : null };
     }
     return s;
   }
@@ -424,10 +437,10 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
   function showBoard() { if (G.cur) closeQuestion(true); G.view = 'board'; commit(); }
   function showSummary() { if (G.cur) closeQuestion(true); stopTimer(true); G.view = 'summary'; sfx.flaps(14); commit('summary'); }
 
-  function openCell(ti, i) {
+  function openCell(ti, i, force) {
     if (['setup', 'final', 'winner'].includes(G.view)) return;
     if (G.played[ck(ti, i)]) {
-      if (!confirm('Этот вопрос уже сыгран. Открыть снова?')) return;
+      if (!force && !confirm('Этот вопрос уже сыгран. Открыть снова?')) return;
       delete G.played[ck(ti, i)]; delete G.cellInfo[ck(ti, i)];
     }
     if (G.cur && G.cur.key !== ck(ti, i)) closeQuestion(true);
@@ -435,8 +448,13 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
     G.cur = { key: ck(ti, i), ti, i, chooser: G.chooser, answering: null, bid: null, hintShown: false, answerShown: false,
               display: q.type === 'order' ? shuffled(q.items.length) : null, wrong: [], winner: null,
               open: G.teams.map(t => t.score), openTotal: total() };
+    if (q.mode === 'falling') {
+      G.cur.fall = { stage: 1, base: q.price, floor: q.floor || q.price / 2, price: q.price, stageAt: Date.now() + 2600, stageDur: 9000, paused: false, frac: 0, buzz: null, out: [], deals: [] };
+      startFall();
+    }
     stopTimer(true);
-    if (sp && sp.kind === 'reg' && sp.card === 'order') G.cur.answering = G.chooser;
+    if (sp && (sp.kind === 'box' || (sp.kind === 'reg' && sp.card === 'order'))) G.cur.answering = G.chooser;
+    if (sp && sp.kind === 'box') G.cur.box = 'closed';
     if (sp) { G.view = 'news'; sfx.glitch(); setTimeout(sfx.news, 340); if (sp.kind === 'reg' && sp.card === 'revoke') setTimeout(sfx.stamp, 2250); }
     else { G.view = 'question'; sfx.open(); }
     commit('open');
@@ -448,13 +466,24 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
     if (sp && sp.kind === 'reg' && sp.card === 'stress') startTimer(15, true);
     sfx.open(); commit();
   }
-  function revealAnswer() { if (!G.cur) return; G.cur.answerShown = true; stopTimer(); commit(); }
+  function revealAnswer() { if (!G.cur) return; if (G.cur.box === 'closed') { toast('Сначала: открыть ящик или продать'); return; } G.cur.answerShown = true; stopTimer(); commit(); }
+  // black box: the choosing team either sells it unopened for half the price or opens it (±full price)
+  function boxSell() {
+    const c = G.cur; if (!c || c.box !== 'closed') return;
+    const half = Math.round(qOf(c.ti, c.i).price / 20) * 10;
+    c.box = 'sold'; c.winner = c.answering; addScore(c.answering, half, 'продал ящик'); G.chooser = c.answering;
+    sfx.sell(); commit('sold');
+  }
+  function boxOpen() {
+    const c = G.cur; if (!c || c.box !== 'closed') return;
+    c.box = 'open'; sfx.unbox(); commit('unbox');
+  }
 
   function closeQuestion(silent, burned) {
     const c = G.cur; if (!c) return;
     const q = qOf(c.ti, c.i), sp = q.special;
     const v = c.bid || q.price;
-    const single = sp && (sp.kind === 'cat' || sp.kind === 'auction' || (sp.kind === 'reg' && sp.card === 'order'));
+    const single = sp && (sp.kind === 'cat' || sp.kind === 'auction' || sp.kind === 'box' || (sp.kind === 'reg' && sp.card === 'order'));
     const mult = sp && sp.kind === 'reg' && sp.card === 'insider' && c.hintShown ? 2 : 1;
     G.teams.forEach((t, k) => {
       const o = c.open[k] ?? t.score, cl = t.score;
@@ -470,7 +499,7 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
     const wc = c.winner != null ? G.teams[c.winner].candles.at(-1) : { o: c.openTotal, c: to, h: Math.max(c.openTotal, to), l: Math.min(c.openTotal, to) };
     G.cellInfo[c.key] = { by: c.winner, stamp, candle: wc };
     G.played[c.key] = true;
-    G.cur = null; stopTimer(true);
+    G.cur = null; stopTimer(true); clearInterval(fallInt);
 
     if (!silent) {
       const moved = G.teams.some((t, k) => t.score !== (c.open[k] ?? t.score));
@@ -487,7 +516,33 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
     closeQuestion(true, true);
     G.view = 'board'; commit('close');
   }
-  const value = () => G.cur ? (G.cur.bid || qOf(G.cur.ti, G.cur.i).price) : 0;
+  const value = () => G.cur ? (G.cur.fall ? G.cur.fall.price : (G.cur.bid || qOf(G.cur.ti, G.cur.i).price)) : 0;
+
+  /* ---------- «Котировка падает»: price steps down while information opens ---------- */
+  let fallInt = 0;
+  const fallLevel = (f, k) => Math.round((f.base - (f.base - f.floor) * (k - 1) / 4) / 5) * 5;
+  function startFall() {
+    clearInterval(fallInt);
+    fallInt = setInterval(() => {
+      const c = G.cur, f = c && c.fall;
+      if (!f) { clearInterval(fallInt); return; }
+      if (f.paused || c.answerShown || G.view !== 'question') return;
+      if (Date.now() - f.stageAt < f.stageDur) return;
+      if (f.stage < 5) { f.stage++; f.price = fallLevel(f, f.stage); f.stageAt = Date.now(); sfx.flaps(4); commit(); }
+      else { c.answerShown = true; sfx.gong(); commit(); }
+    }, 200);
+  }
+  function fallBuzz(t) {
+    const f = G.cur && G.cur.fall; if (!f || f.out.includes(t) || f.buzz != null || G.cur.answerShown) return;
+    f.frac = Math.max(0, Math.min(1, (Date.now() - f.stageAt) / f.stageDur)); f.paused = true; f.buzz = t; G.cur.answering = t;
+    sfx.tick(); commit();
+  }
+  function fallPause() {
+    const f = G.cur && G.cur.fall; if (!f || f.buzz != null) return;
+    if (f.paused) { f.stageAt = Date.now() - f.frac * f.stageDur; f.paused = false; }
+    else { f.frac = Math.max(0, Math.min(1, (Date.now() - f.stageAt) / f.stageDur)); f.paused = true; }
+    commit();
+  }
   function addScore(t, d, label) {
     G.teams.forEach(x => x.delta = 0);
     G.teams[t].score += d; G.teams[t].delta = d;
@@ -495,10 +550,24 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
     if (!G.cur) sfx.flaps(6);
   }
   function judge(t, correct) {
+    if (G.cur && G.cur.box && G.cur.box !== 'open') { toast(G.cur.box === 'sold' ? 'Ящик продан — вопрос не задаётся' : 'Сначала: открыть ящик или продать'); return; }
     if (t >= G.teams.length) return;
     if (G.view === 'final') return judgeFinal(t, correct);
     if (!G.cur || G.view !== 'question') { toast('Сначала откройте вопрос'); return; }
     const sp = qOf(G.cur.ti, G.cur.i).special, v = value();
+    const f = G.cur.fall;
+    if (f) {
+      const deal = { team: t, price: f.price, ok: correct, stage: f.stage, frac: f.paused ? f.frac : Math.max(0, Math.min(1, (Date.now() - f.stageAt) / f.stageDur)) };
+      f.deals.push(deal); f.buzz = null; G.cur.answering = null;
+      if (correct) {
+        addScore(t, f.price, 'верно'); G.chooser = t; G.cur.winner = t; G.cur.answerShown = true;
+        G.teams[t].streak = (G.teams[t].streak || 0) + 1; sfx.correct(); return commit('correct');
+      }
+      addScore(t, -Math.round(f.price / 20) * 10, 'неверно'); G.cur.wrong.push(t); f.out.push(t); G.teams[t].streak = 0;
+      if (f.out.length >= G.teams.length) G.cur.answerShown = true;
+      else { f.stageAt = Date.now() - f.frac * f.stageDur; f.paused = false; }
+      sfx.wrong(); return commit('wrong');
+    }
     if (correct) {
       addScore(t, v, 'верно'); G.chooser = t; G.cur.winner = t; G.cur.answering = null; G.cur.answerShown = true; stopTimer();
       G.teams[t].streak = (G.teams[t].streak || 0) + 1;
@@ -507,10 +576,29 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
       const mult = sp && sp.kind === 'reg' && sp.card === 'insider' && G.cur.hintShown ? 2 : 1;
       addScore(t, -v * mult, 'неверно'); G.cur.wrong.push(t); G.teams[t].streak = 0;
       if (G.cur.answering === t) G.cur.answering = null;
-      const single = sp && (sp.kind === 'cat' || sp.kind === 'auction' || (sp.kind === 'reg' && sp.card === 'order'));
+      const single = sp && (sp.kind === 'cat' || sp.kind === 'auction' || sp.kind === 'box' || (sp.kind === 'reg' && sp.card === 'order'));
       if (single || G.cur.wrong.length >= G.teams.length) { G.cur.answerShown = true; stopTimer(); }
       sfx.wrong(); commit('wrong');
     }
+  }
+  // share of the value by criteria; a bonus item adds on top; nothing ticked = wrong answer
+  function critScore(list, ticked, value) {
+    const base = list.filter(k => !k[2]).reduce((a, k) => a + k[1], 0) || 1;
+    const got = list.reduce((a, k, n) => a + (ticked[n] ? k[1] : 0), 0);
+    return got > 0 ? Math.round(value * got / base / 10) * 10 : -value;
+  }
+  function judgeCriteria(t) {
+    const q = qOf(G.cur.ti, G.cur.i), d = critScore(q.criteria, G.cur.crit || {}, value());
+    G.cur.critDone = true;
+    if (d < 0) return judge(t, false);
+    addScore(t, d, 'по критериям'); G.chooser = t; G.cur.winner = t; G.cur.answering = null; G.cur.answerShown = true; stopTimer();
+    sfx.correct(); commit('correct');
+  }
+  function walkNext() {
+    const c = G.cur; if (!c || !c.answerShown) return;
+    const q = qOf(c.ti, c.i); if (!q.explain) return;
+    if ((c.step || 1) > q.explain.length) return;
+    c.step = (c.step || 1) + 1; sfx.tick(); commit();
   }
   function manual(t, d) {
     addScore(t, d, 'вручную');
@@ -535,9 +623,10 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
   function toFinal() {
     if (G.cur) closeQuestion(true);
     stopTimer(true);
-    let players = G.teams.map((t, i) => i).filter(i => G.teams[i].score > 0);
-    if (!players.length) players = G.teams.map((t, i) => i);
-    G.final = { stage: 'theme', players, bets: {}, betsIn: {}, results: {}, open: G.teams.map(t => t.score), openTotal: total(), closed: false };
+    const auction = D.final.kind === 'auction';
+    let players = auction ? [] : G.teams.map((t, i) => i).filter(i => G.teams[i].score > 0);
+    if (!auction && !players.length) players = G.teams.map((t, i) => i);
+    G.final = { stage: 'theme', auction, players, bets: {}, betsIn: {}, results: {}, deltas: {}, crit: {}, open: G.teams.map(t => t.score), openTotal: total(), closed: false };
     G.view = 'final'; sfx.breaker(); commit();
   }
   function finalStage(st) {
@@ -545,6 +634,14 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
     if (st === 'question') startTimer(60, true);
     if (st === 'reveal') stopTimer();
     sfx.open(); commit();
+  }
+  function judgeFinalCriteria() {
+    const f = G.final, t = f.players[0];
+    if (t == null || f.results[t] != null) return;
+    const b = f.bets[t] || 0, d = critScore(D.final.criteria, f.crit || {}, b);
+    f.results[t] = d > 0; f.deltas[t] = d;
+    addScore(t, d, 'финал');
+    sfx[d > 0 ? 'correct' : 'wrong'](); commit(d > 0 ? 'correct' : 'wrong');
   }
   function judgeFinal(t, correct) {
     const f = G.final;
@@ -660,6 +757,9 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
           <div class="field"><input id="bid" type="number" min="${q.price}" step="100" value="${c.bid || q.price}"><span class="src">очков</span></div>
           <div class="pick">${G.teams.map((t, i) => `<button class="btn${c.answering === i ? ' on' : ''}" data-bidteam="${i}">${esc(t.ticker)} · ${esc(t.name)}</button>`).join('')}</div></div>`;
         actions = `<button class="btn gold" data-act="toQ" ${c.answering == null ? 'disabled' : ''}>Показать вопрос</button>`;
+      } else if (sp.kind === 'box') {
+        html += `<div class="step"><h3>${SPECIAL.box.title}</h3><p>${SPECIAL.box.rule}</p><p>Отвечает: <b>${esc(tk(c.answering))} · ${esc(G.teams[c.answering].name)}</b></p></div>`;
+        actions = `<button class="btn gold" data-act="toQ">Показать вопрос <kbd>Enter</kbd></button>`;
       } else {
         html += `<div class="step"><h3>${REG[sp.card].title}</h3><p>${REG[sp.card].rule}</p></div>`;
         actions = sp.card === 'revoke' ? `<button class="btn gold" data-act="burn">Сжечь клетку — на табло</button>` : `<button class="btn gold" data-act="toQ">Показать вопрос <kbd>Enter</kbd></button>`;
@@ -668,14 +768,45 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
       qp.innerHTML = html; qa.innerHTML = actions + `<button class="btn ghost" data-act="board">Отмена, на табло</button>`;
       return;
     }
+    if (c.box === 'closed') {
+      const half = Math.round(q.price / 20) * 10;
+      html += `<div class="step"><h3>Чёрный ящик · решает ${esc(tk(c.answering))} · ${esc(G.teams[c.answering].name)}</h3><p>Продать не глядя — сразу +${fmt(half)}, вопрос сгорает. Открыть — верно +${fmt(q.price)}, неверно −${fmt(q.price)}.</p></div>`;
+      html += `<div class="qtext" style="opacity:.6">${esc(text)}</div><div class="answer"><div class="lbl">Ответ</div><div class="txt">${esc(ans)}</div></div>`;
+      qp.innerHTML = html; qa.innerHTML = `<button class="btn gold" data-act="boxOpen">Открыть ящик</button><button class="btn" data-act="boxSell">Продать за ${fmt(half)}</button>`;
+      return;
+    }
+    if (c.box === 'sold') {
+      html += `<div class="step"><h3>Ящик продан</h3><p>${esc(tk(c.answering))} получает +${fmt(Math.round(q.price / 20) * 10)}. Вопрос не задаётся.</p></div><div class="qtext" style="opacity:.6">${esc(text)}</div>`;
+      qp.innerHTML = html; qa.innerHTML = `<button class="btn gold" data-act="board">На табло <kbd>Esc</kbd></button>`;
+      return;
+    }
     html += `<div class="qtext">${esc(text)}</div>`;
     if (q.type === 'order') html += `<ol class="qitems">${q.items.map(it => `<li><b>${esc(it[1])}</b>${esc(it[0])}</li>`).join('')}</ol>`;
+    if (q.type === 'match') html += `<ol class="qitems">${q.left.map((l, i) => `<li><b>${i + 1}–${'АБВГДЕ'[q.pairs[i]]}</b>${esc(l)} → ${esc(q.right[q.pairs[i]])}</li>`).join('')}</ol>`;
+    if (MEDIA_KIND[q.type]) html += `<div class="note">На экране: <b>${MEDIA_KIND[q.type]}${q.mode === 'watch' ? ' (остановлен до ответа)' : ''}</b>${q.type === 'tf' && q.vis ? `: «${esc(q.vis.statement)}»` : ''}. После «Показать ответ» на экране появится разбор.</div>`;
+    if (c.fall) {
+      const f = c.fall;
+      html += `<div class="step"><h3>Котировка падает · ступень ${Math.min(f.stage, 5)}/5 · цена ${fmt(f.price)}</h3>
+        <p>Кто поднял руку — нажмите его кнопку: цена замрёт. Затем «Верно» или «Неверно» в ряду команд. Ошибка — минус половина цены, остальные продолжают.</p>
+        <div class="pick">${G.teams.map((t, i) => `<button class="btn${f.buzz === i ? ' on' : ''}" data-fbuzz="${i}" ${f.out.includes(i) || (f.buzz != null && f.buzz !== i) || c.answerShown ? 'disabled' : ''}>${esc(t.ticker)} отвечает</button>`).join('')}
+        <button class="btn ghost" data-act="fallPause" ${f.buzz != null || c.answerShown ? 'disabled' : ''}>${f.paused ? 'Продолжить' : 'Пауза'}</button></div></div>`;
+    }
     html += `<div class="answer"><div class="lbl">Ответ${c.answerShown ? ' · показан залу' : ''}</div><div class="txt">${esc(ans)}</div></div>`;
     if (src) html += `<div class="src"><b>Источник:</b> ${esc(src)}</div>`;
     if (q.note) html += `<div class="note">${esc(q.note)}</div>`;
     if (sp && sp.kind === 'reg' && sp.card === 'insider') html += `<div class="hintbox"><b>Подсказка:</b> ${esc(sp.hint)}</div>`;
+    if (q.criteria && !c.answerShown) {
+      const who = c.answering != null ? c.answering : G.chooser;
+      html += `<div class="step"><h3>Оценка по критериям · ${esc(tk(who))}</h3><p>Отметьте выполненные пункты. Начислится доля стоимости; ни одного пункта — минус стоимость.</p>
+        ${q.criteria.map((k, n) => `<label class="field" style="gap:10px;cursor:pointer"><input type="checkbox" data-crit="${n}" ${c.crit && c.crit[n] ? 'checked' : ''} style="width:18px;height:18px"> ${esc(k[0])} <span class="tag">${k[2] ? 'бонус +' : ''}${k[1]}</span></label>`).join('')}
+        <div class="pick"><button class="btn gold" data-act="critApply" data-team="${who}">Засчитать по критериям</button></div></div>`;
+    }
     if (c.answering != null) html += `<div class="note">Отвечает только: <b>${esc(tk(c.answering))} · ${esc(G.teams[c.answering].name)}</b></div>`;
-    actions = c.answerShown ? `<button class="btn gold" data-act="board">На табло <kbd>Esc</kbd></button>`
+    const walkBtn = c.answerShown && q.explain ? ((c.step || 1) <= q.explain.length
+      ? `<button class="btn gold" data-act="walkNext">Разбор: ${c.step || 1} из ${q.explain.length} — дальше <kbd>Пробел</kbd></button>`
+      : `<span class="tag">Разбор завершён</span>`) : '';
+    if (c.answerShown && q.explain) html += `<div class="step"><h3>Разбор на экране</h3><p>Прожектор по очереди показывает каждое нарушение с пояснением и «исправляет» его. ${c.critDone ? 'Рамки: зелёные — команда нашла, красные — пропустила.' : 'Чтобы рамки показали «найдено / пропущено», засчитайте ответ по критериям.'}</p></div>`;
+    actions = c.answerShown ? walkBtn + `<button class="btn${q.explain ? '' : ' gold'}" data-act="board">На табло <kbd>Esc</kbd></button>`
                             : `<button class="btn gold" data-act="reveal">Показать ответ <kbd>Enter</kbd></button><button class="btn ghost" data-act="board">Закрыть без ответа</button>`;
     if (sp && sp.kind === 'reg' && sp.card === 'insider' && !c.hintShown && !c.answerShown) actions += `<button class="btn" data-act="hint">Слить инсайд (подсказка)</button>`;
     qp.innerHTML = html; qa.innerHTML = actions;
@@ -685,18 +816,33 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
     const f = G.final, F = D.final;
     let html = `<div class="qmeta"><span class="tag gold">Финал</span><span class="tag">${esc(F.theme)}</span></div>`, act = '';
     if (f.stage === 'theme') { html += `<div class="step"><h3>Тема финала на экране</h3><p>Играют: ${f.players.map(i => esc(tk(i) + ' · ' + G.teams[i].name)).join(', ')}.</p></div>`; act = `<button class="btn gold" data-act="fBets">Принять заявки (ставки)</button>`; }
-    if (f.stage === 'bets') {
+    if (f.auction && f.stage === 'theme') { html = html.replace('Тема финала на экране</h3><p>Играют: .</p>', 'Тема финала на экране</h3><p>Аукцион с риском: торгуются все команды.</p>'); }
+    if (f.auction && f.stage === 'bets') {
+      const w = f.players[0];
+      html += `<div class="step"><h3>Аукцион с риском</h3><p>Стартовая цена ${fmt(D.final.start || 0)}. Команды торгуются вслух; введите победную ставку и выберите команду. Верно — +ставка, неверно — −ставка, частично — доля по критериям.</p>
+        <div class="field"><input id="fbid" type="number" min="${D.final.start || 0}" step="100" value="${w != null ? f.bets[w] : (D.final.start || 0)}"><span class="src">очков</span></div>
+        <div class="pick">${G.teams.map((t, i) => `<button class="btn${w === i ? ' on' : ''}" data-act="fAuction" data-team="${i}">${esc(t.ticker)} · ${esc(t.name)}</button>`).join('')}</div></div>`;
+      act = `<button class="btn gold" data-act="fQ" ${w == null ? 'disabled' : ''}>Показать вопрос</button>`;
+    } else if (f.stage === 'bets') {
       html += `<div class="step"><h3>Ставки</h3><p>Команды пишут ставки на листках, вы вводите их сюда. Зал видит только «заявка принята».</p>
         ${f.players.map(i => `<div class="field"><span style="min-width:170px">${esc(tk(i))} · ${esc(G.teams[i].name)}</span><input type="number" min="0" max="${G.teams[i].score}" step="100" data-bet="${i}" value="${f.bets[i] ?? ''}" placeholder="до ${fmt(G.teams[i].score)}"></div>`).join('')}</div>`;
       act = `<button class="btn gold" data-act="fQ">Показать вопрос</button>`;
     }
     if (f.stage === 'question' || f.stage === 'reveal') {
       html += `<div class="qtext">${esc(F.q)}</div><div class="answer"><div class="lbl">Ответ</div><div class="txt">${esc(F.a)}</div></div>`;
+      if (F.steps && F.order) html += `<div class="note">${F.order.map((idx, n) => `${n + 1}. ${'АБВГДЕ'[idx]} ${esc(F.steps[idx][0])} — ${esc(F.steps[idx][1])}`).join('<br>')}</div>`;
       if (F.src) html += `<div class="src"><b>Источник:</b> ${esc(F.src)}</div>`;
       if (F.note) html += `<div class="note">${esc(F.note)}</div>`;
     }
     if (f.stage === 'question') act = `<button class="btn gold" data-act="fReveal">Время вышло — к проверке</button>`;
-    if (f.stage === 'reveal') {
+    if (f.stage === 'reveal' && f.auction) {
+      const t = f.players[0], r = t != null ? f.results[t] : null;
+      html += `<div class="step"><h3>Проверка · ${esc(tk(t))} · ставка ${fmt(f.bets[t] || 0)}</h3>${r == null
+        ? `${(D.final.criteria || []).map((k, n) => `<label class="field" style="gap:10px;cursor:pointer"><input type="checkbox" data-crit="${n}" ${f.crit && f.crit[n] ? 'checked' : ''} style="width:18px;height:18px"> ${esc(k[0])} <span class="tag">${k[2] ? 'бонус +' : ''}${k[1]}</span></label>`).join('')}
+           <div class="pick"><button class="btn gold" data-act="fCrit">Засчитать по критериям</button></div>`
+        : `<p>Итог: <b style="color:${r ? 'var(--up)' : 'var(--down)'}">${f.deltas[t] > 0 ? '+' : '−'}${fmt(Math.abs(f.deltas[t]))}</b></p>`}</div>`;
+      act = `<button class="btn gold" data-act="winner">IPO победителя</button>`;
+    } else if (f.stage === 'reveal') {
       html += `<div class="step"><h3>Проверка</h3><p>На экране свечи с неизвестным исходом. Отметьте каждую команду — свеча «выстрелит» вверх или вниз.</p>${f.players.map(i => {
         const r = f.results[i];
         return `<div class="field"><span style="min-width:200px">${esc(tk(i))} · ставка ${fmt(f.bets[i] || 0)}</span>${r == null
@@ -727,6 +873,7 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
     const b = e.target.closest('button'); if (!b || b.disabled) return;
     ac();
     if (b.dataset.ti != null) return openCell(+b.dataset.ti, +b.dataset.i);
+    if (b.dataset.fbuzz != null) return fallBuzz(+b.dataset.fbuzz);
     if (b.dataset.j != null) return judge(+b.dataset.j, b.dataset.ok === '1');
     if (b.dataset.fj != null) return judgeFinal(+b.dataset.fj, b.dataset.ok === '1');
     if (b.dataset.m != null) return manual(+b.dataset.m, +b.dataset.d);
@@ -740,6 +887,13 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
     if (act === 'board') return showBoard();
     if (act === 'roundIntro') return showRoundIntro();
     if (act === 'burn') return burnCell();
+    if (act === 'walkNext') return walkNext();
+    if (act === 'boxSell') return boxSell();
+    if (act === 'boxOpen') return boxOpen();
+    if (act === 'fallPause') return fallPause();
+    if (act === 'critApply') return judgeCriteria(+b.dataset.team);
+    if (act === 'fAuction') { const bid = Math.max(D.final.start || 0, +($('fbid').value || 0)); const t = +b.dataset.team; const f = G.final; f.players = [t]; f.bets = { [t]: bid }; f.betsIn = { [t]: true }; return commit(); }
+    if (act === 'fCrit') return judgeFinalCriteria();
     if (act === 'hint') { G.cur.hintShown = true; sfx.news(); return commit(); }
     if (act === 'next') return nextRound();
     if (act === 'final') return toFinal();
@@ -757,7 +911,13 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
       save(); send();
     }
   });
-  document.addEventListener('change', e => { if (e.target.dataset.bet != null) { const i = +e.target.dataset.bet; e.target.value = G.final.bets[i]; } });
+  document.addEventListener('change', e => {
+    if (e.target.dataset.crit != null) {
+      const n = +e.target.dataset.crit;
+      if (G.view === 'final' && G.final) { G.final.crit = G.final.crit || {}; G.final.crit[n] = e.target.checked; save(); return; }
+      if (G.cur) { G.cur.crit = G.cur.crit || {}; G.cur.crit[n] = e.target.checked; save(); }
+      return;
+    } if (e.target.dataset.bet != null) { const i = +e.target.dataset.bet; e.target.value = G.final.bets[i]; } });
 
   $('btnScreen').onclick = openScreen;
   $('suScreen').onclick = openScreen;
@@ -773,11 +933,11 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
 
   addEventListener('keydown', e => {
     if (e.target.matches('input, textarea') || G.view === 'setup') return;
-    if (e.code === 'Space') { e.preventDefault(); if (G.view === 'question' || (G.final && G.final.stage === 'question')) toggleTimer(); }
+    if (e.code === 'Space') { e.preventDefault(); if (G.view === 'question' && G.cur && G.cur.answerShown && qOf(G.cur.ti, G.cur.i).explain) walkNext(); else if (G.view === 'question' || (G.final && G.final.stage === 'question')) toggleTimer(); }
     else if (e.key === 'Enter') {
       e.preventDefault();
       if (G.view === 'question' && G.cur && !G.cur.answerShown) revealAnswer();
-      else if (G.view === 'news') { const sp = qOf(G.cur.ti, G.cur.i).special; if (sp.kind === 'reg' && sp.card !== 'revoke') toQuestion(); }
+      else if (G.view === 'news') { const sp = qOf(G.cur.ti, G.cur.i).special; if ((sp.kind === 'reg' && sp.card !== 'revoke') || sp.kind === 'box') toQuestion(); }
     }
     else if (e.key === 'Escape') { if (G.view === 'question' || G.view === 'news' || G.view === 'summary') showBoard(); }
     else if (/^Digit[1-6]$/.test(e.code)) { const t = +e.code.slice(5) - 1; if (G.view === 'question') judge(t, !e.shiftKey); }
@@ -819,9 +979,39 @@ kbd{font:600 11px/1 var(--f-data);padding:3px 5px;border-radius:4px;background:r
     startGame(names.slice(0, count).map((n, i) => [n.trim() || `Команда ${i + 1}`, tks[i] || `T${i + 1}`]));
   };
   const saved = load();
+  let canResume = false;
+  const resumeSaved = () => { G = saved; if (G.timer) G.timer.endsAt = null; if (G.cur && G.cur.fall) { G.cur.fall.paused = true; startFall(); } $('setup').classList.add('hide'); canResume = false; commit(); };
+
+  /* ---------- commands from the one-screen version (solo.html) ---------- */
+  const CMD = {
+    start: list => { const taken = []; startGame(list.map((n, i) => { const t = (n.ticker || makeTicker(n.name || `Команда ${i + 1}`, taken)).toUpperCase().slice(0, 4); taken.push(t); return [n.name || `Команда ${i + 1}`, t]; })); },
+    resume: () => { if (saved) resumeSaved(); },
+    newGame: () => { try { localStorage.removeItem(KEY); } catch (e) {} clearInterval(fallInt); G = fresh(); canResume = false; commit(); },
+    roundIntro: () => showRoundIntro(), board: () => showBoard(), summary: () => showSummary(),
+    open: (ti, i) => openCell(ti, i, true), toQ: () => toQuestion(), reveal: () => revealAnswer(),
+    judge: (t, ok) => judge(t, ok), manual: (t, d) => manual(t, d), undo: () => undo(),
+    chooser: t => { G.chooser = t; commit(); },
+    pick: t => { if (G.cur && t !== G.cur.chooser) { G.cur.answering = t; commit(); } },
+    bid: (t, b) => { if (!G.cur) return; const q = qOf(G.cur.ti, G.cur.i); G.cur.bid = Math.max(q.price, +b || q.price); G.cur.answering = t; commit(); },
+    burn: () => burnCell(), hint: () => { if (G.cur) { G.cur.hintShown = true; sfx.news(); commit(); } },
+    critApply: (t, ticks) => { if (!G.cur) return; G.cur.crit = ticks || {}; judgeCriteria(t); },
+    walkNext: () => walkNext(), boxSell: () => boxSell(), boxOpen: () => boxOpen(), fallBuzz: t => fallBuzz(t), fallPause: () => fallPause(),
+    timer: sec => startTimer(sec), timerToggle: () => toggleTimer(), timerReset: () => { stopTimer(true); commit(); },
+    next: () => nextRound(), final: () => toFinal(), fStage: st => finalStage(st),
+    fAuction: (t, b) => { const f = G.final; if (!f) return; const bid = Math.max(D.final.start || 0, +b || 0); f.players = [t]; f.bets = { [t]: bid }; f.betsIn = { [t]: true }; commit(); },
+    fCrit: ticks => { if (!G.final) return; G.final.crit = ticks || {}; judgeFinalCriteria(); },
+    fJudge: (t, ok) => judgeFinal(t, ok), winner: () => toWinner()
+  };
+  addEventListener('message', e => {
+    const m = e.data;
+    if (!SOLO || !m || m.type !== 'cmd' || e.source !== window.parent) return;
+    const fn = CMD[m.name];
+    if (fn) fn(...(m.args || []));
+  });
   if (saved && saved.teams && saved.teams.length && saved.view !== 'setup') {
+    canResume = true;
     $('suResume').style.display = '';
-    $('suResume').onclick = () => { G = saved; if (G.timer) G.timer.endsAt = null; $('setup').classList.add('hide'); commit(); };
+    $('suResume').onclick = resumeSaved;
   }
   renderSetup();
   render();
